@@ -15,6 +15,34 @@ from core.config import settings
 
 logger = structlog.get_logger(__name__)
 
+
+def _k8s_host_looks_unconfigured(host: str | None) -> bool:
+    """
+    When Kubernetes client config isn't loaded properly, the Python client can
+    fall back to http://localhost:80, which causes confusing connection errors.
+    Treat that as "not configured" and surface a clear message instead.
+    """
+    if not host:
+        return True
+
+    h = host.strip().lower()
+    if h in ("http://localhost", "https://localhost"):
+        return True
+
+    # Common fallback: http(s)://localhost:80
+    if "localhost" in h and (h.endswith(":80") or ":80/" in h):
+        return True
+
+    return False
+
+
+def _k8s_not_ready_error() -> RuntimeError:
+    return RuntimeError(
+        "Kubernetes API'ye baglanilamiyor. Pod baslatmak icin lokal Kubernetes (Docker Desktop Kubernetes veya Minikube) calisir durumda olmali "
+        "ve kubeconfig yuklu olmali. Kontrol: `kubectl cluster-info` ve `kubectl get ns`. "
+        "Sidecar imaji da build edilmeli: `docker build -t aicodereviewer-sidecar:latest backend/sidecar`."
+    )
+
 # Kubeconfig yükleme
 try:
     config.load_kube_config()
@@ -31,6 +59,17 @@ try:
     core_v1 = client.CoreV1Api()
     apps_v1 = client.AppsV1Api()
     networking_v1 = client.NetworkingV1Api()
+
+    # If the host looks like the default localhost fallback, treat as not ready.
+    try:
+        cfg = client.Configuration.get_default_copy()
+        if _k8s_host_looks_unconfigured(getattr(cfg, "host", None)):
+            logger.warning("k8s_config_unconfigured", host=getattr(cfg, "host", None))
+            core_v1 = None
+            apps_v1 = None
+            networking_v1 = None
+    except Exception:
+        pass
 except Exception:
     core_v1 = None
     apps_v1 = None
@@ -57,10 +96,7 @@ async def create_pod(
     
     if not core_v1:
         logger.error("k8s_client_not_initialized")
-        raise RuntimeError(
-            "Kubernetes client başlatılamadı. "
-            "Kubeconfig veya in-cluster config eksik."
-        )
+        raise _k8s_not_ready_error()
 
     loop = asyncio.get_running_loop()
 
@@ -191,7 +227,13 @@ async def create_pod(
                 
         return preview_host, deployment_name, service_name, ingress_name
 
-    result_tuple = await loop.run_in_executor(None, _create_k8s_objects)
+    try:
+        result_tuple = await loop.run_in_executor(None, _create_k8s_objects)
+    except Exception as e:
+        msg = str(e).lower()
+        if "connection refused" in msg or "max retries exceeded" in msg or "localhost" in msg:
+            raise _k8s_not_ready_error() from e
+        raise
     preview_host, deployment_name, service_name, ingress_name = result_tuple
 
     return {
