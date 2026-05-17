@@ -1,10 +1,10 @@
 // Shared micro-interactions and utilities for all landing variants
 // Magnetic hover, text scramble, scroll reveal, cursor glow, marquee, etc.
 
-const { useState, useEffect, useRef, useCallback, useMemo } = React;
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 // ─── Magnetic hover ─────────────────────────────────────────
-function useMagnetic(strength = 0.35) {
+export function useMagnetic(strength = 0.35) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -34,7 +34,7 @@ function useMagnetic(strength = 0.35) {
   return ref;
 }
 
-function Magnetic({ children, strength = 0.35, style, className, ...rest }) {
+export function Magnetic({ children, strength = 0.35, style, className, ...rest }) {
   const ref = useMagnetic(strength);
   return (
     <span
@@ -51,7 +51,7 @@ function Magnetic({ children, strength = 0.35, style, className, ...rest }) {
 // ─── Text scramble ──────────────────────────────────────────
 const SCRAMBLE_CHARS = '!<>-_\\/[]{}—=+*^?#________';
 
-function TextScramble({ text, trigger = 'hover', duration = 700, className, style }) {
+export function TextScramble({ text, trigger = 'hover', duration = 700, className, style }) {
   const ref = useRef(null);
   const [display, setDisplay] = useState(text);
   const rafRef = useRef(0);
@@ -97,7 +97,7 @@ function TextScramble({ text, trigger = 'hover', duration = 700, className, styl
 }
 
 // ─── Scroll reveal ──────────────────────────────────────────
-function Reveal({ children, delay = 0, y = 24, className, style, once = true }) {
+export function Reveal({ children, delay = 0, y = 24, className, style, once = true }) {
   const ref = useRef(null);
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -134,7 +134,7 @@ function Reveal({ children, delay = 0, y = 24, className, style, once = true }) 
 }
 
 // ─── Counter / value tick-up on view ────────────────────────
-function Ticker({ value, duration = 1400, suffix = '', className, style }) {
+export function Ticker({ value, duration = 1400, suffix = '', className, style }) {
   const ref = useRef(null);
   const [n, setN] = useState(0);
   useEffect(() => {
@@ -162,7 +162,7 @@ function Ticker({ value, duration = 1400, suffix = '', className, style }) {
 }
 
 // ─── Marquee (infinite tape) ────────────────────────────────
-function Marquee({ children, speed = 40, style, className }) {
+export function Marquee({ children, speed = 40, style, className }) {
   return (
     <div className={className} style={{ overflow: 'hidden', whiteSpace: 'nowrap', ...style }}>
       <div style={{ display: 'inline-flex', animation: `mq ${speed}s linear infinite`, gap: '3rem' }}>
@@ -174,7 +174,7 @@ function Marquee({ children, speed = 40, style, className }) {
 }
 
 // ─── Accordion for FAQ ──────────────────────────────────────
-function Accordion({ items, accent = '#fff', styleVariant = 'minimal' }) {
+export function Accordion({ items, accent = '#fff', styleVariant = 'minimal' }) {
   const [open, setOpen] = useState(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -260,7 +260,7 @@ function Accordion({ items, accent = '#fff', styleVariant = 'minimal' }) {
 }
 
 // ─── Cursor glow (moved to hero-only by each variant) ───────
-function CursorGlow({ color = 'rgba(255,255,255,0.06)', size = 420, targetRef }) {
+export function CursorGlow({ color = 'rgba(255,255,255,0.06)', size = 420, targetRef }) {
   const [p, setP] = useState({ x: -999, y: -999, on: false });
   useEffect(() => {
     const el = targetRef?.current;
@@ -296,5 +296,6 @@ function CursorGlow({ color = 'rgba(255,255,255,0.06)', size = 420, targetRef })
   );
 }
 
-// Export globally
-Object.assign(window, { Magnetic, useMagnetic, TextScramble, Reveal, Ticker, Marquee, Accordion, CursorGlow });
+if (typeof window !== 'undefined') {
+  Object.assign(window, { Magnetic, useMagnetic, TextScramble, Reveal, Ticker, Marquee, Accordion, CursorGlow });
+}

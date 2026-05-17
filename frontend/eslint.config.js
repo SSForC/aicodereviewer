@@ -7,6 +7,25 @@ export default [
   {
     files: ['**/*.{js,jsx}'],
     ...js.configs.recommended,
+    languageOptions: {
+      ...js.configs.recommended.languageOptions,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        localStorage: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
+        WebSocket: 'readonly',
+        fetch: 'readonly',
+        console: 'readonly',
+        importMeta: 'readonly',
+      },
+    },
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
