@@ -63,7 +63,11 @@ class Settings(BaseSettings):
     # ── OpenRouter (Alternative AI Provider) ───────
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
-    # AI_PROVIDER: "google" veya "openrouter"
+    # â”€â”€ OpenAI (AI_PROVIDER=openai) â”€â”€â”€â”€â”€â”€â”€
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+
+    # AI_PROVIDER: "google" | "openrouter" | "openai"
     AI_PROVIDER: str = "google"
 
     # ── Qdrant ───────────────────────────────────────
@@ -73,6 +77,8 @@ class Settings(BaseSettings):
     # ── Kubernetes ───────────────────────────────────
     K8S_IN_CLUSTER: bool = False
     K8S_NAMESPACE_PREFIX: str = "project-"
+    # Ingress controller class name (Minikube ingress addon uses "nginx")
+    K8S_INGRESS_CLASS: str = "nginx"
 
     # ── Container Kapasite Yönetimi ──────────────────
     MAX_ACTIVE_PODS: int = 12           # Cluster geneli aktif pod limiti

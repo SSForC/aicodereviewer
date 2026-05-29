@@ -200,8 +200,15 @@ async def create_pod(
         ingress = client.V1Ingress(
             api_version="networking.k8s.io/v1",
             kind="Ingress",
-            metadata=client.V1ObjectMeta(name=ingress_name),
+            metadata=client.V1ObjectMeta(
+                name=ingress_name,
+                annotations={
+                    # Backward compatibility for controllers that still look at the annotation.
+                    "kubernetes.io/ingress.class": settings.K8S_INGRESS_CLASS,
+                },
+            ),
             spec=client.V1IngressSpec(
+                ingress_class_name=settings.K8S_INGRESS_CLASS,
                 rules=[client.V1IngressRule(
                     host=preview_host,
                     http=client.V1HTTPIngressRuleValue(

@@ -38,6 +38,11 @@ def _get_llm():
     provider = (settings.AI_PROVIDER or "google").lower().strip()
 
     if provider == "openrouter":
+        if not (settings.OPENROUTER_API_KEY or "").strip():
+            raise RuntimeError(
+                "AI ayarı eksik: AI_PROVIDER=openrouter ama OPENROUTER_API_KEY boş. "
+                "backend/.env içine OPENROUTER_API_KEY=... ekleyip backend'i yeniden başlatın."
+            )
         from langchain_openai import ChatOpenAI
         _llm_instance = ChatOpenAI(
             model=settings.AI_MODEL,
@@ -50,7 +55,26 @@ def _get_llm():
                 "X-Title": "AI Code Reviewer",
             },
         )
+    elif provider == "openai":
+        if not (settings.OPENAI_API_KEY or "").strip():
+            raise RuntimeError(
+                "AI ayarı eksik: AI_PROVIDER=openai ama OPENAI_API_KEY boş. "
+                "backend/.env içine OPENAI_API_KEY=... ekleyip backend'i yeniden başlatın."
+            )
+        from langchain_openai import ChatOpenAI
+        _llm_instance = ChatOpenAI(
+            model=settings.AI_MODEL,
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.OPENAI_BASE_URL,
+            temperature=0.1,
+            max_tokens=8192,
+        )
     else:
+        if not (settings.GOOGLE_API_KEY or "").strip():
+            raise RuntimeError(
+                "AI ayarı eksik: AI_PROVIDER=google ama GOOGLE_API_KEY boş. "
+                "backend/.env içine GOOGLE_API_KEY=... ekleyip backend'i yeniden başlatın."
+            )
         from langchain_google_genai import ChatGoogleGenerativeAI
         _llm_instance = ChatGoogleGenerativeAI(
             model=settings.AI_MODEL,

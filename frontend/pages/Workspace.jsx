@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { APP, AppTopBar, Chip, Dot } from '../tokens.jsx';
-import { getProject, startProject, stopProject, listFiles, readFile, execCommand } from '../api/projects.js';
+import { getProject, startProject, stopProject, listFiles, readFile, writeFile } from '../api/projects.js';
 import { runAgent, createAgentStream, createLogsStream } from '../api/agent.js';
+import { cloneGithubRepo } from '../api/github.js';
 
 const ideBtn = {
   background: 'transparent', color: APP.fg, border: `1px solid ${APP.line}`,
@@ -489,6 +490,7 @@ function WorkspaceFull({ project, onStop, initialMessage }) {
   const [sessionId, setSessionId] = useState(null);
   const [activeTab, setActiveTab] = useState('agent');
   const [stopping, setStopping] = useState(false);
+  const [creatingIndex, setCreatingIndex] = useState(false);
   const wsRef = useRef(null);
   const logsWsRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -509,6 +511,36 @@ function WorkspaceFull({ project, onStop, initialMessage }) {
       setFilesLoading(false);
     }
   }, [projectId]);
+
+  const createIndexHtml = useCallback(async () => {
+    if (creatingIndex) return;
+    setCreatingIndex(true);
+    setFilesError('');
+    try {
+      const html = [
+        '<!doctype html>',
+        '<html lang="tr">',
+        '<head>',
+        '  <meta charset="utf-8" />',
+        '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+        '  <title>Preview</title>',
+        '  <style>body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:40px}code{background:#111827;color:#e5e7eb;padding:2px 6px;border-radius:6px}</style>',
+        '</head>',
+        '<body>',
+        '  <h1>Preview hazır</h1>',
+        '  <p>Bu dosya UI üzerinden otomatik oluşturuldu.</p>',
+        '  <p>Dosya: <code>/index.html</code></p>',
+        '</body>',
+        '</html>',
+      ].join('\\n');
+      await writeFile(projectId, '/index.html', html);
+      await loadFiles();
+    } catch (err) {
+      setFilesError(err.message ?? 'index.html oluşturulamadı.');
+    } finally {
+      setCreatingIndex(false);
+    }
+  }, [projectId, creatingIndex, loadFiles]);
 
   const toggleDirectory = useCallback(async (node) => {
     const isOpen = expandedDirs.has(node.path);
@@ -679,22 +711,32 @@ function WorkspaceFull({ project, onStop, initialMessage }) {
         </button>
       </AppTopBar>
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr 380px', minHeight: 0 }}>
-        {/* FILE TREE */}
-        <div style={{ borderRight: `1px solid ${APP.line}`, display: 'flex', flexDirection: 'column', background: APP.bg, overflow: 'hidden' }}>
-          <div style={{
-            padding: '10px 14px', borderBottom: `1px solid ${APP.line}`,
-            fontSize: 11, fontFamily: APP.mono, color: APP.faint,
-            letterSpacing: '0.12em', textTransform: 'uppercase',
-            display: 'flex', justifyContent: 'space-between', flexShrink: 0,
-          }}>
-            <span>gezgin</span>
-            <button onClick={loadFiles} style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 13 }}>↺</button>
-          </div>
-          <div style={{ padding: '8px 0', fontFamily: APP.mono, fontSize: 13, flex: 1, overflow: 'auto' }}>
-            {filesError && (
-              <div style={{ padding: 14, color: APP.err, fontSize: 12 }}>
-                {filesError}
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr 380px', minHeight: 0 }}>
+          {/* FILE TREE */}
+          <div style={{ borderRight: `1px solid ${APP.line}`, display: 'flex', flexDirection: 'column', background: APP.bg, overflow: 'hidden' }}>
+            <div style={{
+              padding: '10px 14px', borderBottom: `1px solid ${APP.line}`,
+              fontSize: 11, fontFamily: APP.mono, color: APP.faint,
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              display: 'flex', justifyContent: 'space-between', flexShrink: 0,
+            }}>
+              <span>gezgin</span>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button
+                  onClick={createIndexHtml}
+                  title="index.html oluştur"
+                  style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 14, opacity: creatingIndex ? 0.6 : 1 }}
+                  disabled={creatingIndex}
+                >
+                  ＋
+                </button>
+                <button onClick={loadFiles} title="yenile" style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 13 }}>↺</button>
+              </div>
+            </div>
+            <div style={{ padding: '8px 0', fontFamily: APP.mono, fontSize: 13, flex: 1, overflow: 'auto' }}>
+              {filesError && (
+                <div style={{ padding: 14, color: APP.err, fontSize: 12 }}>
+                  {filesError}
               </div>
             )}
             {filesLoading ? (
@@ -979,11 +1021,7 @@ export default function Workspace() {
         }, 2500);
       });
     }
-    const safeUrl = String(url).replace(/'/g, "'\"'\"'");
-    const result = await execCommand(projectId, `git clone '${safeUrl}' .`);
-    if (result.exit_code !== 0) {
-      throw new Error(result.stderr || 'git clone başarısız oldu');
-    }
+    await cloneGithubRepo(projectId, url);
   };
 
   const handleStop = () => {
