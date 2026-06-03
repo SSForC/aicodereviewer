@@ -1,83 +1,106 @@
-# 🧊 Cube — AI Destekli Bulut Geliştirme Platformu
+# revu — AI destekli izole kod workspace'i
 
-Cube, kullanıcıların doğrudan tarayıcı üzerinden yapay zeka (AI) destekli kod yazabildiği, düzenleyebildiği ve anlık olarak önizleyebildiği bulut tabanlı bir geliştirme platformudur. Projeler Kubernetes üzerinde izole bir şekilde çalışır ve LangGraph tabanlı bir AI ajanı kod yazımına doğrudan eşlik eder.
+`revu`, tarayıcıdan kod yazma, düzenleme, çalıştırma ve önizleme akışını tek ekranda birleştiren AI destekli bir geliştirme platformudur. Her proje Kubernetes içinde ayrı namespace/pod olarak çalışır; backend dosya işlemleri ve komut çalıştırmayı sidecar üzerinden yönetir, AI ajanı da bu güvenli sandbox'a bağlanır.
 
-## 🚀 Öne Çıkan Özellikler
+## Kısa Özet
 
-- **AI Ajanı ile Geliştirme:** LangGraph ve Google Gemini 1.5 Pro tabanlı ajan ile doğal dilde kod yazdırın ve hataları ayıklayın. RAG (Qdrant) desteği sayesinde ajan tüm projenin bağlamına hakimdir.
-- **İzole Çalışma Ortamları (Sandbox):** Her proje için ayrı bir Kubernetes namespace ve pod tahsis edilir. Kapsamlı path traversal ve komut filtreleme korumalarına sahip Sidecar mimarisi ile güvenli komut çalıştırma.
-- **Gerçek Zamanlı İletişim:** WebSocket üzerinden ajan adımlarını ve konsol loglarını anlık izleme imkanı.
-- **Gelişmiş Güvenlik:** JWT ve Refresh Token Rotation ile güvenli oturum yönetimi. İki katmanlı (Nginx & SlowAPI) rate limiting koruması.
-- **Maliyet Optimizasyonu:** Idle (boşta kalan) pod'ları otomatik tespit edip durduran arka plan servisleri ile gereksiz kaynak tüketiminin önüne geçilir.
-- **GitHub Entegrasyonu:** Public GitHub repolarını çalışma alanına saniyeler içinde dahil etme desteği.
+- Kullanıcı proje açar, pod başlatır ve dosya ağacını görür.
+- AI, dosyaları okuyup yazar; gerektiğinde komut çalıştırır ve sonucu terminal/log paneline düşürür.
+- Kullanıcı isterse kodu elle düzenler, kaydeder veya bilgisayarına indirir.
+- HTML dosyaları için hızlı önizleme, Python dosyaları için çalıştırma akışı vardır.
+- GitHub reposu import edilebilir; profil menüsü ve dashboard geçişleri de hazırdır.
 
-## 📸 Ekran Görüntüleri
+## Temel Özellikler
 
-### 1. Çalışma Alanı (Workspace) ve AI Ajan
-![Workspace](assets/workspace.png)
-*Modern, üç bölmeli IDE arayüzü: Dosya Gezgini, Kod Görüntüleyici ve AI Chat & Terminal*
+- **Workspace düzenleyici:** Dosya ağacı, kod editörü, agent sohbeti ve terminal/log alanı tek sayfada.
+- **Manuel düzenleme:** Dosyayı doğrudan editörde değiştirme, `Kaydet` ile pod'a yazma, `İndir` ile bilgisayara alma.
+- **AI ajanı:** Dosya okuma/yazma, klasör oluşturma, komut çalıştırma ve özetleme adımlarını yönetir.
+- **Run akışı:** Python dosyalarını `python <dosya>` ile çalıştırma; diğer runtime'lar için uygun komut önerileri.
+- **Önizleme:** `index.html` ve benzeri statik sayfaları preview link'i ile açma.
+- **GitHub import:** Public/private repo import akışı.
+- **Profil menüsü:** Logo ile dashboard'a dönüş, profil sayfası ve çıkış yap.
 
-### 2. Proje Yönetimi (Dashboard)
-![Dashboard](assets/dashboard.png)
-*Projelerin durumunu anlık izleyebileceğiniz merkezi kontrol paneli*
+## Nasıl Çalışır
 
-### 3. Kullanıcı Girişi
-![Login Screen](assets/login.png)
-*Güvenli oturum açma ve kayıt arayüzü*
+1. Frontend, proje ve workspace durumunu backend'den çeker.
+2. Backend, Kubernetes'te ilgili proje için namespace/pod oluşturur.
+3. Sidecar, `/workspace` altında dosya okuma/yazma ve komut çalıştırma sağlar.
+4. AI ajanı, plan/action/observer akışıyla işi parçalara ayırır ve sonucu kaydeder.
 
-## 🛠 Teknoloji Yığını
+## Lokal Çalıştırma
 
-- **Frontend:** React 19.1, Vite, React Router DOM, Özel CSS (CSS variables tabanlı)
-- **Backend:** Python 3.12, FastAPI, Uvicorn, LangGraph, LangChain, Pydantic v2
-- **Veritabanı:** MongoDB Atlas (Motor async driver)
-- **Vektör Veritabanı:** Qdrant (RAG işlemleri için)
-- **Yapay Zeka:** Google Gemini 1.5 Pro & gemini-embedding-2
-- **Altyapı:** Kubernetes (Minikube), Docker, Docker Compose, Nginx
+### Gerekenler
 
-## ⚙️ Kurulum ve Dağıtım
+- Docker Desktop açık olmalı.
+- Node.js/npm kurulu olmalı.
+- Backend için proje içindeki `.venv` kullanılmalı.
 
-Platformu ayağa kaldırmak için öncelikle ortam değişkenlerini (`.env`) yapılandırmanız gerekir. Gerekli tüm parametreler için `.env.example` dosyasını baz alabilirsiniz.
-Başlıca gerekli değişkenler: `MONGODB_URI`, `JWT_SECRET_KEY`, `GOOGLE_API_KEY`.
+### 1) Lokal stack'i sırayla çalıştır
 
-### Yerel Geliştirme (Sadece Backend & MongoDB)
-```bash
-cd backend
-pip install -r requirements.txt
-cp .env.example .env
-# .env dosyasını gerekli bilgilerle doldurun
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+Repo kökünde 3 ayrı PowerShell aç:
 
-### Minikube ile Tam Kurulum (Full Stack)
+**Terminal 1**
 ```powershell
-minikube start
-minikube addons enable ingress
-minikube tunnel  # Ayrı bir terminal penceresinde açık kalmalı
-
-# Sidecar Docker imajını Minikube ortamına build edin
-powershell -ExecutionPolicy Bypass -File .\backend\scripts\build-sidecar-minikube.ps1
-
-# Backend'i başlatın (Kubeconfig otomatik olarak entegre edilecektir)
-powershell -ExecutionPolicy Bypass -File .\backend\scripts\start-backend-minikube.ps1
+docker compose up -d mongo
 ```
 
-### Üretim Ortamı (Docker Compose)
-```bash
-cp .env.example .env
-# .env dosyasını üretim parametreleriyle doldurun
-docker-compose up -d
-docker-compose logs -f backend
+**Terminal 2**
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-backend.ps1
 ```
 
-## 🏗 Mimari Detaylar
+**Terminal 3**
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-frontend.ps1
+```
 
-1. **Nginx Reverse Proxy:** HTTP trafiğini HTTPS'e yönlendirir, WebSocket (`Upgrade`) isteklerini yönetir ve IP bazlı aşımlar için Rate Limiting uygular.
-2. **Kubernetes Pod Yapısı:** 
-   - **App Container:** Boşta bekleyen (idle loop) ve kullanıcının uygulamasının barındırıldığı asıl ortamdır.
-   - **Sidecar Container (FastAPI):** `/workspace` (emptyDir) volume'unu App Container ile paylaşır. AI ajanının dosya okuma/yazma ve izole komut çalıştırma (`/exec`) isteklerini güvenlik kuralları (Path traversal vb.) çerçevesinde yönetir.
-3. **AI ve RAG İş Akışı:** Qdrant üzerinde tutulan proje dosyaları anlamsal olarak aranır (Semantic Search). En uygun kod parçaları Gemini promptuna Context olarak enjekte edilip ajana sunulur, böylelikle büyük projelerde dahi ajan yüksek doğrulukla çalışır.
+Frontend:
 
-## 🤝 Katkıda Bulunma
+- http://127.0.0.1:5173
 
-- Hatalar (bug) ve özellik istekleri (feature requests) için lütfen "Issues" kısmını kullanın.
-- Büyük ve yapısal değişiklikler yapmadan önce sistemin mevcut işleyişini bozmamak adına tartışmak için bir "Issue" açmanız rica olunur.
+### 2) Minikube kur ve ayağa kaldır
+
+```powershell
+winget install Kubernetes.minikube
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-minikube.ps1
+```
+
+Ayrı bir terminalde:
+
+```powershell
+minikube tunnel
+```
+
+Sidecar imajını Minikube içine build et:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-sidecar-minikube.ps1
+```
+
+### 3) Cluster kontrolü
+
+```powershell
+kubectl config get-contexts
+kubectl cluster-info
+kubectl get pods -A
+```
+
+## AI Yapılandırması
+
+`backend/.env` içinde bir provider seç:
+
+- **OpenAI:** `AI_PROVIDER=openai`, `OPENAI_API_KEY=...`, `AI_MODEL=...`
+- **OpenRouter:** `AI_PROVIDER=openrouter`, `OPENROUTER_API_KEY=...`, `AI_MODEL=...`
+- **Google:** `AI_PROVIDER=google`, `GOOGLE_API_KEY=...`, `AI_MODEL=...`
+
+Not:
+- AI anahtarlarını repoya yazma.
+- Key değiştiyse backend'i yeniden başlat.
+
+## Proje Yapısı
+
+- `frontend/` — React/Vite kullanıcı arayüzü
+- `backend/` — FastAPI API, agent ve sandbox köprüsü
+- `backend/sidecar/` — Pod içi dosya/komut servisleri
+- `scripts/` — backend, frontend ve Minikube yardımcı scriptleri
+
