@@ -1,0 +1,12 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\backend",
+    "\\backend\\agent\\memory",
+    "\\backend\\core",
+    "\\frontend",
+    "\\scripts"
+  ],
+  "SelectedNode": "\\backend\\core\\database.py",
+  "PreviewInSolutionExplorer": false
+}
