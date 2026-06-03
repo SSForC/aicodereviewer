@@ -31,6 +31,11 @@ function normalizeWorkspacePath(input = '') {
   return cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
 }
 
+function getFilename(path = '') {
+  const parts = String(path || '').replace(/\\/g, '/').split('/').filter(Boolean);
+  return parts[parts.length - 1] || 'file.txt';
+}
+
 function collectWorkspacePaths(nodes = [], output = []) {
   nodes.forEach((node) => {
     output.push(node.path);
@@ -41,27 +46,109 @@ function collectWorkspacePaths(nodes = [], output = []) {
   return output;
 }
 
-function suggestRunCommand(nodes = []) {
+function hasPathEnding(nodes = [], suffixes = []) {
   const paths = collectWorkspacePaths(nodes).map((p) => p.toLowerCase());
-  if (paths.some((p) => p.endsWith('/package.json') || p === '/package.json')) {
-    return 'npm run dev -- --host 0.0.0.0';
+  return paths.some((p) => suffixes.some((suffix) => p.endsWith(suffix)));
+}
+
+function buildPreviewUrl(baseUrl = '', path = '') {
+  if (!baseUrl) return '';
+  const cleanedPath = String(path || '').replace(/^\/+/, '');
+  if (!cleanedPath || cleanedPath === 'index.html') {
+    return baseUrl.replace(/\/+$/, '');
   }
-  if (paths.some((p) => p.endsWith('/vite.config.js') || p.endsWith('/vite.config.ts'))) {
-    return 'npm run dev -- --host 0.0.0.0';
+  return `${baseUrl.replace(/\/+$/, '')}/${cleanedPath}`;
+}
+
+function downloadTextFile(filename, content) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function shellQuote(value = '') {
+  const text = String(value);
+  if (!text) return '""';
+  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function findFirstPathEnding(nodes = [], suffixes = []) {
+  const paths = collectWorkspacePaths(nodes);
+  return paths.find((path) => suffixes.some((suffix) => path.toLowerCase().endsWith(suffix))) ?? '';
+}
+
+function getRunHint(nodes = [], activePath = '') {
+  const normalizedActivePath = String(activePath || '').toLowerCase();
+  const activeIsPython = normalizedActivePath.endsWith('.py');
+  const firstPythonFile = findFirstPathEnding(nodes, ['.py']);
+  const runPythonTarget = activeIsPython ? activePath : firstPythonFile;
+
+  if (runPythonTarget) {
+    return {
+      mode: 'command',
+      label: 'Çalıştır',
+      command: `python ${shellQuote(runPythonTarget)}`,
+      description: 'Python dosyasını çalıştır. İstersen py_compile ile sözdizimi kontrolü de yapabilirsin.',
+    };
   }
-  if (paths.some((p) => p.endsWith('/requirements.txt') || p.endsWith('/pyproject.toml'))) {
-    return 'python main.py';
+
+  if (hasPathEnding(nodes, ['/package.json', '/vite.config.js', '/vite.config.ts'])) {
+    return {
+      mode: 'command',
+      label: 'Çalıştır',
+      command: 'npm run dev -- --host 0.0.0.0',
+      description: 'Node/Vite projesi tespit edildi; dev sunucusunu çalıştır.',
+    };
   }
-  if (paths.some((p) => p.endsWith('/go.mod'))) {
-    return 'go run .';
+
+  if (hasPathEnding(nodes, ['/requirements.txt', '/pyproject.toml'])) {
+    return {
+      mode: 'command',
+      label: 'Çalıştır',
+      command: 'python main.py',
+      description: 'Python projesi tespit edildi; main.py çalıştırmayı dene.',
+    };
   }
-  if (paths.some((p) => p.endsWith('/cargo.toml'))) {
-    return 'cargo run';
+
+  if (hasPathEnding(nodes, ['/go.mod'])) {
+    return {
+      mode: 'command',
+      label: 'Çalıştır',
+      command: 'go run .',
+      description: 'Go projesi tespit edildi.',
+    };
   }
-  if (paths.some((p) => p.endsWith('/pom.xml'))) {
-    return 'mvn test';
+
+  if (hasPathEnding(nodes, ['/cargo.toml'])) {
+    return {
+      mode: 'command',
+      label: 'Çalıştır',
+      command: 'cargo run',
+      description: 'Rust projesi tespit edildi.',
+    };
   }
-  return 'npm test';
+
+  if (hasPathEnding(nodes, ['/pom.xml'])) {
+    return {
+      mode: 'command',
+      label: 'Çalıştır',
+      command: 'mvn test',
+      description: 'Java/Maven projesi tespit edildi.',
+    };
+  }
+
+  return {
+    mode: 'command',
+    label: 'Çalıştır',
+    command: 'python main.py',
+    description: 'Python dosyası seç veya komutu değiştir. Çıktı terminal panelinde görünür.',
+  };
 }
 
 function createTreeNodes(flatList = [], basePath = '') {
@@ -839,6 +926,9 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
   const [filesError, setFilesError] = useState('');
   const [activeFile, setActiveFile] = useState(null);
   const [fileContent, setFileContent] = useState('');
+  const [editorContent, setEditorContent] = useState('');
+  const [editorSaving, setEditorSaving] = useState(false);
+  const [editorStatus, setEditorStatus] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
   const [agentLogs, setAgentLogs] = useState([]);
@@ -855,7 +945,8 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
   const logsWsRef = useRef(null);
   const chatEndRef = useRef(null);
   const initialSent = useRef(false);
-  const suggestedRunCommand = useMemo(() => suggestRunCommand(files), [files]);
+  const runHint = useMemo(() => getRunHint(files, activeFile?.path ?? ''), [files, activeFile?.path]);
+  const hasUnsavedChanges = editorContent !== fileContent;
 
   const loadFiles = useCallback(async () => {
     setFilesLoading(true);
@@ -921,6 +1012,10 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
       setRunningCommand(false);
     }
   }, [projectId, loadFiles, runningCommand]);
+
+  const handlePrimaryRun = useCallback(() => {
+    setShowRunCommand(true);
+  }, []);
 
   const toggleDirectory = useCallback(async (node) => {
     const isOpen = expandedDirs.has(node.path);
@@ -996,11 +1091,37 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
     setActiveFile(node);
     try {
       const res = await readFile(projectId, toApiPath(node.path));
-      setFileContent(res.content ?? '');
+      const content = res.content ?? '';
+      setFileContent(content);
+      setEditorContent(content);
+      setEditorStatus('');
     } catch {
       setFileContent('// dosya okunamadı');
+      setEditorContent('// dosya okunamadı');
     }
   };
+
+  const saveCurrentFile = useCallback(async () => {
+    if (!activeFile) return;
+    setEditorSaving(true);
+    setEditorStatus('');
+    try {
+      await writeFile(projectId, toApiPath(activeFile.path), editorContent);
+      setFileContent(editorContent);
+      setEditorStatus('Kaydedildi');
+      await loadFiles();
+    } catch (err) {
+      setEditorStatus(err.message ?? 'Kaydedilemedi');
+      throw err;
+    } finally {
+      setEditorSaving(false);
+    }
+  }, [activeFile, editorContent, loadFiles, projectId]);
+
+  const downloadCurrentFile = useCallback(() => {
+    if (!activeFile) return;
+    downloadTextFile(getFilename(activeFile.path), editorContent || fileContent || '');
+  }, [activeFile, editorContent, fileContent]);
 
   const sendMessage = async () => {
     const msg = chatInput.trim();
@@ -1063,7 +1184,7 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
   };
 
   const codeLines = fileContent
-    ? fileContent.split('\n').map((t, i) => ({ n: i + 1, t }))
+    ? editorContent.split('\n').map((t, i) => ({ n: i + 1, t }))
     : [];
 
   const displayedLogs = activeTab === 'agent' ? agentLogs : terminalLines;
@@ -1123,18 +1244,23 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
       {showRunCommand && (
         <CommandModal
           title="Komut çalıştır"
-          description="Aşağıdaki komut sandbox içindeki pod’da çalışır. Önerilen komut, workspace içindeki dosyalara göre otomatik seçildi."
-          initialCommand={suggestedRunCommand}
+          description={runHint.description}
+          initialCommand={runHint.command ?? 'npm test'}
           onClose={() => setShowRunCommand(false)}
           onSubmit={async (command) => {
             await runCommand(command);
           }}
-          suggestions={[
-            suggestedRunCommand,
-            'npm test',
-            'npm run build',
-            'python main.py',
-          ].filter((item, index, arr) => item && arr.indexOf(item) === index)}
+          suggestions={
+            runHint.mode === 'command'
+              ? [
+                  runHint.command,
+                  activeFile?.path?.toLowerCase().endsWith('.py') ? `python -m py_compile ${shellQuote(activeFile.path)}` : '',
+                  'npm test',
+                  'npm run build',
+                  'python main.py',
+                ].filter((item, index, arr) => item && arr.indexOf(item) === index)
+              : ['index.html'].filter(Boolean)
+          }
         />
       )}
 
@@ -1185,7 +1311,7 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
                   ⊞
                 </button>
                 <button
-                  onClick={() => setShowRunCommand(true)}
+                  onClick={handlePrimaryRun}
                   title="Komut çalıştır"
                   style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 14 }}
                 >
@@ -1236,6 +1362,36 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
             ) : (
               <div style={{ padding: '10px 16px', color: APP.faint }}>dosya seçilmedi</div>
             )}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12 }}>
+              {activeFile && (
+                <>
+                  <button
+                    onClick={downloadCurrentFile}
+                    style={{
+                      ...ideBtn,
+                      padding: '6px 10px',
+                      fontSize: 12,
+                    }}
+                  >
+                    İndir
+                  </button>
+                  <button
+                    onClick={saveCurrentFile}
+                    disabled={!hasUnsavedChanges || editorSaving}
+                    style={{
+                      ...ideBtn,
+                      padding: '6px 10px',
+                      fontSize: 12,
+                      background: hasUnsavedChanges ? APP.fg : 'transparent',
+                      color: hasUnsavedChanges ? APP.bg : APP.faint,
+                      opacity: editorSaving ? 0.6 : 1,
+                    }}
+                  >
+                    {editorSaving ? 'Kaydediliyor…' : 'Kaydet'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {activeFile && (
@@ -1245,20 +1401,36 @@ function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessag
               fontFamily: APP.mono, fontSize: 11, color: APP.faint, flexShrink: 0,
             }}>
               <span>{activeFile.path}</span>
-              <span>{codeLines.length} satır</span>
+              <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <span>{codeLines.length} satır</span>
+                {hasUnsavedChanges && <span style={{ color: APP.warn }}>değişiklik var</span>}
+                {editorStatus && <span>{editorStatus}</span>}
+              </span>
             </div>
           )}
 
-          <div style={{ flex: 1, overflow: 'auto', padding: '12px 0', fontFamily: APP.mono, fontSize: 13, lineHeight: 1.7 }}>
-            {codeLines.length > 0 ? codeLines.map((l) => (
-              <div key={l.n} style={{ display: 'grid', gridTemplateColumns: '52px 1fr' }}>
-                <span style={{
-                  color: APP.faint, textAlign: 'right', paddingRight: 14,
-                  fontVariantNumeric: 'tabular-nums', userSelect: 'none',
-                }}>{l.n}</span>
-                <span style={{ whiteSpace: 'pre', color: APP.fg }}>{l.t || ' '}</span>
-              </div>
-            )) : (
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {activeFile ? (
+              <textarea
+                value={editorContent}
+                onChange={(e) => setEditorContent(e.target.value)}
+                spellCheck={false}
+                style={{
+                  flex: 1,
+                  width: '100%',
+                  resize: 'none',
+                  border: 'none',
+                  outline: 'none',
+                  background: APP.bg,
+                  color: APP.fg,
+                  fontFamily: APP.mono,
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                  padding: '14px 16px',
+                  whiteSpace: 'pre',
+                }}
+              />
+            ) : (
               <div style={{ padding: '20px 16px', color: APP.faint, fontSize: 13 }}>
                 Soldaki gezginden bir dosya seç.
               </div>

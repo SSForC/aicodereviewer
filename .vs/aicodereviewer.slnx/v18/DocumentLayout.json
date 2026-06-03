@@ -1,0 +1,157 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\core\\database.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\core\\database.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\agent\\memory\\file_tree.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\agent\\memory\\file_tree.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\agent\\graph.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\agent\\graph.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\containers\\service.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\containers\\service.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\scripts\\build-sidecar-minikube.ps1||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:scripts\\build-sidecar-minikube.ps1||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\sidecar\\requirements.txt||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\sidecar\\requirements.txt||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\docker-compose.yml||{06C066C6-04A2-4E5D-8202-439FD4234EF1}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:docker-compose.yml||{06C066C6-04A2-4E5D-8202-439FD4234EF1}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{0ad07096-bba9-4900-a651-0598d26f6d24}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
+            }
+          ]
+        },
+        {
+          "DockedWidth": 498,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "database.py",
+              "DocumentMoniker": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\core\\database.py",
+              "RelativeDocumentMoniker": "backend\\core\\database.py",
+              "ToolTip": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\core\\database.py",
+              "RelativeToolTip": "backend\\core\\database.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-06-03T22:14:22.57Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "file_tree.py",
+              "DocumentMoniker": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\agent\\memory\\file_tree.py",
+              "RelativeDocumentMoniker": "backend\\agent\\memory\\file_tree.py",
+              "ToolTip": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\agent\\memory\\file_tree.py",
+              "RelativeToolTip": "backend\\agent\\memory\\file_tree.py",
+              "ViewState": "AgIAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-06-03T22:13:45.078Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "graph.py",
+              "DocumentMoniker": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\agent\\graph.py",
+              "RelativeDocumentMoniker": "backend\\agent\\graph.py",
+              "ToolTip": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\agent\\graph.py",
+              "RelativeToolTip": "backend\\agent\\graph.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-06-03T22:13:32.016Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "service.py",
+              "DocumentMoniker": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\containers\\service.py",
+              "RelativeDocumentMoniker": "backend\\containers\\service.py",
+              "ToolTip": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\containers\\service.py",
+              "RelativeToolTip": "backend\\containers\\service.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-06-03T22:13:18.456Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "build-sidecar-minikube.ps1",
+              "DocumentMoniker": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\scripts\\build-sidecar-minikube.ps1",
+              "RelativeDocumentMoniker": "scripts\\build-sidecar-minikube.ps1",
+              "ToolTip": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\scripts\\build-sidecar-minikube.ps1",
+              "RelativeToolTip": "scripts\\build-sidecar-minikube.ps1",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-06-03T22:13:12.991Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "requirements.txt",
+              "DocumentMoniker": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\sidecar\\requirements.txt",
+              "RelativeDocumentMoniker": "backend\\sidecar\\requirements.txt",
+              "ToolTip": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\backend\\sidecar\\requirements.txt",
+              "RelativeToolTip": "backend\\sidecar\\requirements.txt",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003109|",
+              "WhenOpened": "2026-06-03T22:13:02.623Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "docker-compose.yml",
+              "DocumentMoniker": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\docker-compose.yml",
+              "RelativeDocumentMoniker": "docker-compose.yml",
+              "ToolTip": "C:\\Users\\Suleyman\\Desktop\\CodeReviewer\\aicodereviewer\\docker-compose.yml",
+              "RelativeToolTip": "docker-compose.yml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003775|",
+              "WhenOpened": "2026-06-03T22:12:43.463Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{34e76e81-ee4a-11d0-ae2e-00a0c90fffc3}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
