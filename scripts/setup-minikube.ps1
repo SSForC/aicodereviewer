@@ -21,4 +21,3 @@ Write-Host ""
 Write-Host "Verify cluster:"
 Write-Host "  kubectl cluster-info"
 Write-Host "  kubectl get pods -A"
-
