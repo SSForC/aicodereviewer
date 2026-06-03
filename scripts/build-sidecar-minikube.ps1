@@ -12,4 +12,3 @@ Set-Location $root
 minikube image build -t aicodereviewer-sidecar:latest $sidecarDir
 
 Write-Host "Done. You can now start a project pod from the UI."
-
