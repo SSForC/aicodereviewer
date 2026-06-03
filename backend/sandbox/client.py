@@ -200,6 +200,27 @@ class SandboxClient:
             json={"path": path, "content": content},
         )
 
+    async def create_directory(self, path: str) -> dict:
+        """
+        Workspace içinde klasör oluştur.
+
+        Args:
+            path: Oluşturulacak klasör yolu.
+
+        Returns:
+            Sidecar response dict.
+        """
+        logger.debug(
+            "sandbox_create_directory",
+            project_id=self.project_id,
+            path=path,
+        )
+        return await self._request(
+            "POST",
+            "/directories/create",
+            json={"path": path},
+        )
+
     async def delete_file(self, path: str) -> dict:
         """
         Dosya sil.

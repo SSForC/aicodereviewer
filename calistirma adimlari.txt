@@ -1,0 +1,33 @@
+    docker desktop açık olmalı
+
+ Lokal stack’i doğru sırayla çalıştır
+Repo kökünde 3 ayrı PowerShell:
+
+Terminal 1:
+docker compose up -d mongo
+
+Terminal 2:
+powershell -ExecutionPolicy Bypass -File .\scripts\start-backend.ps1
+
+Terminal 3:
+powershell -ExecutionPolicy Bypass -File .\scripts\start-frontend.ps1
+
+Sonra frontend: http://127.0.0.1:5173
+
+ winget install Kubernetes.minikube
+
+
+Cluster’ı başlat ve ingress’i aç:
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-minikube.ps1
+Ayrı bir terminal aç, bunu çalıştır ve açık bırak:
+minikube tunnel
+Sidecar imajını Minikube içine build et:
+powershell -ExecutionPolicy Bypass -File .\scripts\build-sidecar-minikube.ps1
+
+Kontrol komutları (cluster hazır mı):
+
+kubectl config get-contexts
+kubectl cluster-info
+kubectl get pods -A
+
+Bence şu an en doğru yaklaşım, projeyi “AI destekli izole kod workspace’i” olarak konumlamak. Yani ürünün hikâyesi şu: kullanıcı repo açıyor, AI dosyaları değiştiriyor, pod içinde komut çalışıyor, önizleme dönüyor, sonuç tek ekranda izleniyor.

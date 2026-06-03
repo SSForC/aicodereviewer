@@ -5,11 +5,6 @@ import { Magnetic, TextScramble, Ticker } from '../shared.jsx';
 import { listProjects, createProject, deleteProject } from '../api/projects.js';
 import { logout, getUser } from '../api/auth.js';
 
-const navBtn = {
-  background: 'transparent', border: 'none', color: APP.dim,
-  fontSize: 13, padding: '8px 12px', cursor: 'pointer', fontFamily: APP.sans,
-};
-
 const statusColor = {
   running: APP.accent, starting: APP.warn, stopping: APP.warn,
   idle: APP.faint, created: APP.faint, stopped: APP.faint, error: APP.err,
@@ -216,11 +211,17 @@ export default function Dashboard() {
         />
       )}
 
-      <AppTopBar>
+      <AppTopBar
+        user={user?.username ?? user?.email ?? 'profil'}
+        profileItems={[
+          { label: 'Dashboard', action: 'dashboard' },
+          { label: 'Profilim', action: 'profile' },
+          { label: 'Çıkış yap', action: 'logout', onClick: handleLogout },
+        ]}
+      >
         <span style={{ fontSize: 12, color: APP.faint, fontFamily: APP.mono }}>
           {user?.username ?? '—'}
         </span>
-        <button style={navBtn} onClick={handleLogout}>Çıkış yap</button>
       </AppTopBar>
 
       <div style={{ padding: '40px 32px', maxWidth: 1400, margin: '0 auto', width: '100%', flex: 1 }}>

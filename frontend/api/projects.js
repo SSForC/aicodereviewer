@@ -16,5 +16,8 @@ export const readFile = (projectId, path) =>
 export const writeFile = (projectId, path, content) =>
   apiRequest('POST', `/projects/${projectId}/files/write`, { path, content });
 
+export const createDirectory = (projectId, path) =>
+  apiRequest('POST', `/projects/${projectId}/directories/create`, { path });
+
 export const execCommand = (projectId, command, timeout = 30) =>
   apiRequest('POST', `/projects/${projectId}/exec`, { command, timeout });

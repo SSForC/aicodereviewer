@@ -1,8 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { APP, AppTopBar, Chip, Dot } from '../tokens.jsx';
-import { getProject, startProject, stopProject, listFiles, readFile, execCommand } from '../api/projects.js';
+import {
+  getProject,
+  startProject,
+  stopProject,
+  listFiles,
+  readFile,
+  writeFile,
+  createDirectory,
+  execCommand,
+} from '../api/projects.js';
 import { runAgent, createAgentStream, createLogsStream } from '../api/agent.js';
+import { cloneGithubRepo } from '../api/github.js';
+import { logout, getUser } from '../api/auth.js';
 
 const ideBtn = {
   background: 'transparent', color: APP.fg, border: `1px solid ${APP.line}`,
@@ -12,6 +23,45 @@ const ideBtn = {
 
 function toApiPath(path = '') {
   return path ? `/${path}` : '/';
+}
+
+function normalizeWorkspacePath(input = '') {
+  const cleaned = input.trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+  if (!cleaned) return '/';
+  return cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
+}
+
+function collectWorkspacePaths(nodes = [], output = []) {
+  nodes.forEach((node) => {
+    output.push(node.path);
+    if (node.children?.length) {
+      collectWorkspacePaths(node.children, output);
+    }
+  });
+  return output;
+}
+
+function suggestRunCommand(nodes = []) {
+  const paths = collectWorkspacePaths(nodes).map((p) => p.toLowerCase());
+  if (paths.some((p) => p.endsWith('/package.json') || p === '/package.json')) {
+    return 'npm run dev -- --host 0.0.0.0';
+  }
+  if (paths.some((p) => p.endsWith('/vite.config.js') || p.endsWith('/vite.config.ts'))) {
+    return 'npm run dev -- --host 0.0.0.0';
+  }
+  if (paths.some((p) => p.endsWith('/requirements.txt') || p.endsWith('/pyproject.toml'))) {
+    return 'python main.py';
+  }
+  if (paths.some((p) => p.endsWith('/go.mod'))) {
+    return 'go run .';
+  }
+  if (paths.some((p) => p.endsWith('/cargo.toml'))) {
+    return 'cargo run';
+  }
+  if (paths.some((p) => p.endsWith('/pom.xml'))) {
+    return 'mvn test';
+  }
+  return 'npm test';
 }
 
 function createTreeNodes(flatList = [], basePath = '') {
@@ -127,7 +177,315 @@ function GitHubModal({ onClose, onImport }) {
 }
 
 // ─── Empty state ─────────────────────────────────────────────
-function WorkspaceEmpty({ project, onStart, onGitHubImport, pendingMsg, onPendingMsg }) {
+function PathActionModal({
+  title,
+  description,
+  confirmLabel,
+  initialPath,
+  pathLabel,
+  pathPlaceholder,
+  showContent = false,
+  initialContent = '',
+  contentLabel = 'içerik',
+  contentPlaceholder = '',
+  onClose,
+  onSubmit,
+}) {
+  const [path, setPath] = useState(initialPath);
+  const [content, setContent] = useState(initialContent);
+  const [error, setError] = useState('');
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const normalizedPath = normalizeWorkspacePath(path);
+    if (!normalizedPath || normalizedPath === '/') {
+      setError('Geçerli bir yol girin.');
+      return;
+    }
+
+    try {
+      setError('');
+      await onSubmit(normalizedPath, content);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 200,
+        background: 'rgba(0,0,0,0.7)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 520,
+          maxWidth: '92vw',
+          padding: 28,
+          background: APP.panel,
+          border: `1px solid ${APP.line}`,
+          borderRadius: 16,
+          fontFamily: APP.sans,
+        }}
+      >
+        <div style={{ fontSize: 11, color: APP.faint, fontFamily: APP.mono, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>
+          <span style={{ color: APP.accent }}>◐</span> {title}
+        </div>
+        <p style={{ margin: '0 0 18px', fontSize: 13, color: APP.dim, lineHeight: 1.6 }}>
+          {description}
+        </p>
+        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 12, color: APP.dim, fontFamily: APP.mono }}>{pathLabel}</span>
+            <input
+              autoFocus
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder={pathPlaceholder}
+              style={{
+                padding: '11px 13px',
+                background: APP.bg,
+                border: `1px solid ${APP.line}`,
+                color: APP.fg,
+                borderRadius: 9,
+                fontFamily: APP.mono,
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+          </label>
+          {showContent && (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 12, color: APP.dim, fontFamily: APP.mono }}>{contentLabel}</span>
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={contentPlaceholder}
+                rows={11}
+                style={{
+                  padding: '11px 13px',
+                  background: APP.bg,
+                  border: `1px solid ${APP.line}`,
+                  color: APP.fg,
+                  borderRadius: 9,
+                  fontFamily: APP.mono,
+                  fontSize: 13,
+                  outline: 'none',
+                  resize: 'vertical',
+                }}
+              />
+            </label>
+          )}
+          {error && (
+            <div style={{ fontSize: 12, color: '#ff7a6e', fontFamily: APP.mono }}>[err] {error}</div>
+          )}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '9px 16px',
+                background: 'transparent',
+                border: `1px solid ${APP.line}`,
+                color: APP.dim,
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontFamily: APP.sans,
+                fontSize: 13,
+              }}
+            >
+              İptal
+            </button>
+            <button
+              type="submit"
+              style={{
+                padding: '9px 16px',
+                background: APP.fg,
+                border: 'none',
+                color: APP.bg,
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontFamily: APP.sans,
+                fontSize: 13,
+                fontWeight: 500,
+              }}
+            >
+              {confirmLabel}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CommandModal({
+  title,
+  description,
+  initialCommand,
+  onClose,
+  onSubmit,
+  suggestions = [],
+}) {
+  const [command, setCommand] = useState(initialCommand);
+  const [error, setError] = useState('');
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const normalized = command.trim();
+    if (!normalized) {
+      setError('Komut boş olamaz.');
+      return;
+    }
+
+    try {
+      setError('');
+      await onSubmit(normalized);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 220,
+        background: 'rgba(0,0,0,0.7)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 560,
+          maxWidth: '92vw',
+          padding: 28,
+          background: APP.panel,
+          border: `1px solid ${APP.line}`,
+          borderRadius: 16,
+          fontFamily: APP.sans,
+        }}
+      >
+        <div style={{ fontSize: 11, color: APP.faint, fontFamily: APP.mono, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>
+          <span style={{ color: APP.accent }}>◔</span> {title}
+        </div>
+        <p style={{ margin: '0 0 18px', fontSize: 13, color: APP.dim, lineHeight: 1.6 }}>
+          {description}
+        </p>
+        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 12, color: APP.dim, fontFamily: APP.mono }}>komut</span>
+            <textarea
+              autoFocus
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              rows={4}
+              placeholder="npm run dev -- --host 0.0.0.0"
+              style={{
+                padding: '11px 13px',
+                background: APP.bg,
+                border: `1px solid ${APP.line}`,
+                color: APP.fg,
+                borderRadius: 9,
+                fontFamily: APP.mono,
+                fontSize: 13,
+                outline: 'none',
+                resize: 'vertical',
+              }}
+            />
+          </label>
+          {suggestions.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {suggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setCommand(item)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    border: `1px solid ${APP.line}`,
+                    background: APP.bg,
+                    color: APP.dim,
+                    cursor: 'pointer',
+                    fontFamily: APP.mono,
+                    fontSize: 11,
+                  }}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          )}
+          {error && (
+            <div style={{ fontSize: 12, color: '#ff7a6e', fontFamily: APP.mono }}>[err] {error}</div>
+          )}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '9px 16px',
+                background: 'transparent',
+                border: `1px solid ${APP.line}`,
+                color: APP.dim,
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontFamily: APP.sans,
+                fontSize: 13,
+              }}
+            >
+              İptal
+            </button>
+            <button
+              type="submit"
+              style={{
+                padding: '9px 16px',
+                background: APP.fg,
+                border: 'none',
+                color: APP.bg,
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontFamily: APP.sans,
+                fontSize: 13,
+                fontWeight: 500,
+              }}
+            >
+              Çalıştır
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceEmpty({
+  project,
+  userLabel,
+  profileItems,
+  onStart,
+  onGitHubImport,
+  pendingMsg,
+  onPendingMsg,
+}) {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
   const [showGithub, setShowGithub] = useState(false);
@@ -172,7 +530,7 @@ function WorkspaceEmpty({ project, onStart, onGitHubImport, pendingMsg, onPendin
         <GitHubModal onClose={() => setShowGithub(false)} onImport={handleGitHub} />
       )}
       <div style={{ background: APP.bg, color: APP.fg, height: '100vh', fontFamily: APP.sans, display: 'flex', flexDirection: 'column' }}>
-        <AppTopBar project={project?.name ?? '…'} user="—">
+        <AppTopBar project={project?.name ?? '…'} user={userLabel} profileItems={profileItems}>
           <Chip color={project?.status === 'error' ? APP.err : APP.dim}>
             <Dot color={project?.status === 'error' ? APP.err : APP.faint} size={5} glow={false} />
             pod: {project?.status ?? 'yükleniyor'}
@@ -473,7 +831,7 @@ function ExplorerTree({ nodes, depth, active, expandedDirs, onToggle, onSelect }
 }
 
 // ─── Full state ───────────────────────────────────────────────
-function WorkspaceFull({ project, onStop, initialMessage }) {
+function WorkspaceFull({ project, userLabel, profileItems, onStop, initialMessage }) {
   const projectId = project.id;
   const [files, setFiles] = useState([]);
   const [expandedDirs, setExpandedDirs] = useState(new Set());
@@ -489,10 +847,15 @@ function WorkspaceFull({ project, onStop, initialMessage }) {
   const [sessionId, setSessionId] = useState(null);
   const [activeTab, setActiveTab] = useState('agent');
   const [stopping, setStopping] = useState(false);
+  const [showCreateFile, setShowCreateFile] = useState(false);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [showRunCommand, setShowRunCommand] = useState(false);
+  const [runningCommand, setRunningCommand] = useState(false);
   const wsRef = useRef(null);
   const logsWsRef = useRef(null);
   const chatEndRef = useRef(null);
   const initialSent = useRef(false);
+  const suggestedRunCommand = useMemo(() => suggestRunCommand(files), [files]);
 
   const loadFiles = useCallback(async () => {
     setFilesLoading(true);
@@ -509,6 +872,55 @@ function WorkspaceFull({ project, onStop, initialMessage }) {
       setFilesLoading(false);
     }
   }, [projectId]);
+
+  const createFile = useCallback(async (path, content) => {
+    setFilesError('');
+    await writeFile(projectId, path, content);
+    await loadFiles();
+  }, [projectId, loadFiles]);
+
+  const createFolder = useCallback(async (path) => {
+    setFilesError('');
+    await createDirectory(projectId, path);
+    await loadFiles();
+  }, [projectId, loadFiles]);
+
+  const runCommand = useCallback(async (command) => {
+    if (runningCommand) return;
+    setRunningCommand(true);
+    setActiveTab('terminal');
+    setFilesError('');
+    setTerminalLines((prev) => [
+      ...prev,
+      { t: `$ ${command}`, c: APP.accent },
+    ]);
+
+    try {
+      const res = await execCommand(projectId, command, 120);
+      const lines = [];
+      if (res.stdout) {
+        res.stdout.split('\n').filter(Boolean).forEach((line) => {
+          lines.push({ t: line, c: APP.fg });
+        });
+      }
+      if (res.stderr) {
+        res.stderr.split('\n').filter(Boolean).forEach((line) => {
+          lines.push({ t: line, c: APP.warn });
+        });
+      }
+      lines.push({
+        t: `[exit ${res.exit_code ?? 'ok'}] ${res.command}`,
+        c: res.exit_code === 0 ? APP.accent : APP.err,
+      });
+      setTerminalLines((prev) => [...prev, ...lines]);
+      await loadFiles();
+    } catch (err) {
+      setTerminalLines((prev) => [...prev, { t: `[err] ${err.message}`, c: APP.err }]);
+      throw err;
+    } finally {
+      setRunningCommand(false);
+    }
+  }, [projectId, loadFiles, runningCommand]);
 
   const toggleDirectory = useCallback(async (node) => {
     const isOpen = expandedDirs.has(node.path);
@@ -658,7 +1070,75 @@ function WorkspaceFull({ project, onStop, initialMessage }) {
 
   return (
     <div style={{ background: APP.bg, color: APP.fg, height: '100vh', fontFamily: APP.sans, display: 'flex', flexDirection: 'column' }}>
-      <AppTopBar project={project.name} user="—">
+      {showCreateFile && (
+        <PathActionModal
+          title="Yeni dosya"
+          description="Workspace içine yeni bir dosya ekleyelim. Dilersen kök dizine, dilersen alt klasöre yazabilirsin."
+          confirmLabel="Dosyayı oluştur"
+          initialPath="/index.html"
+          pathLabel="dosya yolu"
+          pathPlaceholder="/src/index.html"
+          showContent
+          initialContent={`<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:40px}
+    code{background:#111827;color:#e5e7eb;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <h1>Preview hazır</h1>
+  <p>Bu dosya UI üzerinden oluşturuldu.</p>
+  <p>Dosya: <code>/index.html</code></p>
+</body>
+</html>`}
+          contentLabel="dosya içeriği"
+          contentPlaceholder="HTML, JS, Python..."
+          onClose={() => setShowCreateFile(false)}
+          onSubmit={async (path, content) => {
+            await createFile(path, content);
+          }}
+        />
+      )}
+
+      {showCreateFolder && (
+        <PathActionModal
+          title="Yeni klasör"
+          description="Klasörler boş da olabilir; dosya oluştururken parent klasörleri de otomatik açabiliriz."
+          confirmLabel="Klasörü oluştur"
+          initialPath="/src"
+          pathLabel="klasör yolu"
+          pathPlaceholder="/src/components"
+          onClose={() => setShowCreateFolder(false)}
+          onSubmit={async (path) => {
+            await createFolder(path);
+          }}
+        />
+      )}
+
+      {showRunCommand && (
+        <CommandModal
+          title="Komut çalıştır"
+          description="Aşağıdaki komut sandbox içindeki pod’da çalışır. Önerilen komut, workspace içindeki dosyalara göre otomatik seçildi."
+          initialCommand={suggestedRunCommand}
+          onClose={() => setShowRunCommand(false)}
+          onSubmit={async (command) => {
+            await runCommand(command);
+          }}
+          suggestions={[
+            suggestedRunCommand,
+            'npm test',
+            'npm run build',
+            'python main.py',
+          ].filter((item, index, arr) => item && arr.indexOf(item) === index)}
+        />
+      )}
+
+      <AppTopBar project={project.name} user={userLabel} profileItems={profileItems}>
         <Chip color={APP.accent} border={APP.accentDim}><Dot /> pod: running</Chip>
         {project.preview_url && (
           <a
@@ -679,22 +1159,45 @@ function WorkspaceFull({ project, onStop, initialMessage }) {
         </button>
       </AppTopBar>
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr 380px', minHeight: 0 }}>
-        {/* FILE TREE */}
-        <div style={{ borderRight: `1px solid ${APP.line}`, display: 'flex', flexDirection: 'column', background: APP.bg, overflow: 'hidden' }}>
-          <div style={{
-            padding: '10px 14px', borderBottom: `1px solid ${APP.line}`,
-            fontSize: 11, fontFamily: APP.mono, color: APP.faint,
-            letterSpacing: '0.12em', textTransform: 'uppercase',
-            display: 'flex', justifyContent: 'space-between', flexShrink: 0,
-          }}>
-            <span>gezgin</span>
-            <button onClick={loadFiles} style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 13 }}>↺</button>
-          </div>
-          <div style={{ padding: '8px 0', fontFamily: APP.mono, fontSize: 13, flex: 1, overflow: 'auto' }}>
-            {filesError && (
-              <div style={{ padding: 14, color: APP.err, fontSize: 12 }}>
-                {filesError}
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr 380px', minHeight: 0 }}>
+          {/* FILE TREE */}
+          <div style={{ borderRight: `1px solid ${APP.line}`, display: 'flex', flexDirection: 'column', background: APP.bg, overflow: 'hidden' }}>
+            <div style={{
+              padding: '10px 14px', borderBottom: `1px solid ${APP.line}`,
+              fontSize: 11, fontFamily: APP.mono, color: APP.faint,
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              display: 'flex', justifyContent: 'space-between', flexShrink: 0,
+            }}>
+              <span>gezgin</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowCreateFile(true)}
+                  title="Yeni dosya"
+                  style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 14 }}
+                >
+                  ＋
+                </button>
+                <button
+                  onClick={() => setShowCreateFolder(true)}
+                  title="Yeni klasör"
+                  style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 14 }}
+                >
+                  ⊞
+                </button>
+                <button
+                  onClick={() => setShowRunCommand(true)}
+                  title="Komut çalıştır"
+                  style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 14 }}
+                >
+                  ▶
+                </button>
+                <button onClick={loadFiles} title="yenile" style={{ background: 'none', border: 'none', color: APP.faint, cursor: 'pointer', fontSize: 13 }}>↺</button>
+              </div>
+            </div>
+            <div style={{ padding: '8px 0', fontFamily: APP.mono, fontSize: 13, flex: 1, overflow: 'auto' }}>
+              {filesError && (
+                <div style={{ padding: 14, color: APP.err, fontSize: 12 }}>
+                  {filesError}
               </div>
             )}
             {filesLoading ? (
@@ -926,6 +1429,17 @@ export default function Workspace() {
   const [error, setError] = useState('');
   const [pendingMsg, setPendingMsg] = useState('');
   const pollRef = useRef(null);
+  const user = getUser();
+  const userLabel = user?.username ?? user?.email ?? 'profil';
+
+  const profileItems = [
+    { label: 'Dashboard', action: 'dashboard' },
+    { label: 'Profilim', action: 'profile' },
+    { label: 'Çıkış yap', action: 'logout', onClick: async () => {
+      await logout();
+      navigate('/login');
+    } },
+  ];
 
   const load = useCallback(async () => {
     try {
@@ -979,11 +1493,7 @@ export default function Workspace() {
         }, 2500);
       });
     }
-    const safeUrl = String(url).replace(/'/g, "'\"'\"'");
-    const result = await execCommand(projectId, `git clone '${safeUrl}' .`);
-    if (result.exit_code !== 0) {
-      throw new Error(result.stderr || 'git clone başarısız oldu');
-    }
+    await cloneGithubRepo(projectId, url);
   };
 
   const handleStop = () => {
@@ -1010,19 +1520,23 @@ export default function Workspace() {
 
   if (project.status !== 'running') {
     return (
-      <WorkspaceEmpty
-        project={project}
-        onStart={handleStart}
-        onGitHubImport={handleGitHubImport}
-        pendingMsg={pendingMsg}
-        onPendingMsg={setPendingMsg}
-      />
+    <WorkspaceEmpty
+      project={project}
+      userLabel={userLabel}
+      profileItems={profileItems}
+      onStart={handleStart}
+      onGitHubImport={handleGitHubImport}
+      pendingMsg={pendingMsg}
+      onPendingMsg={setPendingMsg}
+    />
     );
   }
 
   return (
     <WorkspaceFull
       project={project}
+      userLabel={userLabel}
+      profileItems={profileItems}
       onStop={handleStop}
       initialMessage={pendingMsg}
     />

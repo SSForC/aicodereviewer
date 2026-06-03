@@ -25,6 +25,10 @@ class DeleteFileRequest(BaseModel):
     path: str
 
 
+class CreateDirectoryRequest(BaseModel):
+    path: str
+
+
 class ExecRequest(BaseModel):
     command: str
     timeout: int = 30
@@ -111,6 +115,13 @@ async def write_file(req: WriteFileRequest) -> Dict:
     target_file.parent.mkdir(parents=True, exist_ok=True)
     
     target_file.write_text(req.content, encoding="utf-8")
+    return {"success": True, "path": req.path}
+
+
+@app.post("/directories/create")
+async def create_directory(req: CreateDirectoryRequest) -> Dict:
+    target_dir = resolve_path(req.path)
+    target_dir.mkdir(parents=True, exist_ok=True)
     return {"success": True, "path": req.path}
 
 

@@ -38,6 +38,11 @@ def _get_llm():
     provider = (settings.AI_PROVIDER or "google").lower().strip()
 
     if provider == "openrouter":
+        if not (settings.OPENROUTER_API_KEY or "").strip():
+            raise RuntimeError(
+                "AI ayarı eksik: AI_PROVIDER=openrouter ama OPENROUTER_API_KEY boş. "
+                "backend/.env içine OPENROUTER_API_KEY=... ekleyip backend'i yeniden başlatın."
+            )
         from langchain_openai import ChatOpenAI
         _llm_instance = ChatOpenAI(
             model=settings.AI_MODEL,
@@ -50,7 +55,26 @@ def _get_llm():
                 "X-Title": "AI Code Reviewer",
             },
         )
+    elif provider == "openai":
+        if not (settings.OPENAI_API_KEY or "").strip():
+            raise RuntimeError(
+                "AI ayarı eksik: AI_PROVIDER=openai ama OPENAI_API_KEY boş. "
+                "backend/.env içine OPENAI_API_KEY=... ekleyip backend'i yeniden başlatın."
+            )
+        from langchain_openai import ChatOpenAI
+        _llm_instance = ChatOpenAI(
+            model=settings.AI_MODEL,
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.OPENAI_BASE_URL,
+            temperature=0.1,
+            max_tokens=8192,
+        )
     else:
+        if not (settings.GOOGLE_API_KEY or "").strip():
+            raise RuntimeError(
+                "AI ayarı eksik: AI_PROVIDER=google ama GOOGLE_API_KEY boş. "
+                "backend/.env içine GOOGLE_API_KEY=... ekleyip backend'i yeniden başlatın."
+            )
         from langchain_google_genai import ChatGoogleGenerativeAI
         _llm_instance = ChatGoogleGenerativeAI(
             model=settings.AI_MODEL,
@@ -78,6 +102,88 @@ def _request_expects_html(user_request: str) -> bool:
     req = (user_request or "").lower()
     keywords = ("html", "sayfa", "page", "web")
     return any(k in req for k in keywords)
+
+
+def _is_simple_text_edit_request(user_request: str) -> bool:
+    """
+    Kısa ve doğrudan dosya düzenleme isteklerini tespit eder.
+
+    Bu tür işlerde ajanı gereksiz planlama / restart döngüsüne sokmamak için
+    graph tarafında erken durdurma ve action tarafında daha sıkı kurallar uygularız.
+    """
+    req = (user_request or "").lower()
+    edit_keywords = (
+        "değiştir",
+        "degistir",
+        "düzenle",
+        "duzenle",
+        "çevir",
+        "cevir",
+        "replace",
+        "rename",
+        "isimlerini",
+        "adlarını",
+        "adlarini",
+        "yaz",
+        "ekle",
+        "sil",
+    )
+    runtime_keywords = (
+        "çalıştır",
+        "calistir",
+        "run",
+        "build",
+        "test",
+        "compile",
+        "restart",
+        "server",
+        "sunucu",
+        "npm",
+        "python",
+        "gcc",
+        "node",
+    )
+    return any(k in req for k in edit_keywords) and not any(k in req for k in runtime_keywords)
+
+
+def _extract_simple_replace_request(user_request: str) -> dict | None:
+    """
+    Tek dosyada kelime/değer değiştirme isteklerini ayıklar.
+
+    Örnek:
+      "index.html deki day ve night isimlerini aydinlik ve karanlik olarak değiştir"
+    """
+    import re
+
+    req = (user_request or "").strip()
+    normalized = req.casefold()
+    old_marker = " deki "
+    old_terms_marker = " isimlerini "
+    new_terms_marker = " olarak "
+
+    old_start = normalized.find(old_marker)
+    old_terms_start = normalized.find(old_terms_marker, old_start + len(old_marker)) if old_start >= 0 else -1
+    new_terms_start = normalized.find(new_terms_marker, old_terms_start + len(old_terms_marker)) if old_terms_start >= 0 else -1
+    if min(old_start, old_terms_start, new_terms_start) < 0:
+        return None
+
+    path = req[:old_start].strip(" \"'`")
+    if not path:
+        return None
+
+    def _split_terms(text: str) -> list[str]:
+        parts = [part.strip(" ,;:.\"'`") for part in re.split(r"\s+ve\s+|,\s*", text) if part.strip(" ,;:.\"'`")]
+        return parts
+
+    old_terms = _split_terms(req[old_start + len(old_marker):old_terms_start])
+    new_terms = _split_terms(req[old_terms_start + len(old_terms_marker):new_terms_start].replace("isimlerini", ""))
+    if not old_terms or len(old_terms) != len(new_terms):
+        return None
+
+    return {
+        "path": path,
+        "pairs": list(zip(old_terms, new_terms)),
+    }
 
 
 def _extract_json_payload(raw: str) -> dict | None:
@@ -257,6 +363,7 @@ Kurallar:
 3. Her adımda ne yapacağını açıkla.
 4. Hata olursa logları kontrol et ve düzelt.
 5. İşin bitince restart_service() çağır.
+6. Basit metin/dosya düzenlemelerinde restart_service kullanma; write_file sonrası dur.
 
 Planını JSON formatında döndür:
 {
@@ -278,6 +385,9 @@ DOSYA ÖZETLERİ:
 KULLANICI İSTEĞİ:
 {state['user_request']}
 """
+
+    if _is_simple_text_edit_request(state.get("user_request", "")):
+        context += "\nNOT: Bu istek basit bir dosya/metin düzenlemesi. Gereksiz komut çalıştırma ve restart_service kullanma."
 
     messages = [
         SystemMessage(content=system_prompt),
@@ -316,8 +426,47 @@ async def action_node(state: dict) -> dict:
         step=step,
     )
 
-    llm = _get_llm()
     user_request = state.get("user_request", "")
+    simple_edit_mode = _is_simple_text_edit_request(user_request)
+
+    simple_replace = _extract_simple_replace_request(user_request) if simple_edit_mode else None
+    if simple_replace:
+        from sandbox.client import SandboxClient
+        import json
+        import re
+
+        client = SandboxClient(state["project_id"])
+        source_path = simple_replace["path"]
+        read_result = await client.read_file(source_path)
+        original_content = read_result.get("content", "")
+
+        updated_content = original_content
+        for old_text, new_text in simple_replace["pairs"]:
+            updated_content = re.sub(re.escape(old_text), new_text, updated_content)
+
+        action_payload = {
+            "tool": "write_file",
+            "args": {
+                "path": source_path,
+                "content": updated_content,
+            },
+            "reason": "Basit metin değişikliği için mevcut içeriği koruyarak hedef ifadeleri değiştirdim.",
+        }
+        normalized_action = json.dumps(action_payload, ensure_ascii=False, indent=2)
+        tool_result = await _execute_tool(state["project_id"], normalized_action)
+
+        return {
+            **state,
+            "current_step": step,
+            "last_action": normalized_action,
+            "last_result": tool_result,
+            "messages": state.get("messages", []) + [
+                {"role": "assistant", "content": normalized_action, "node": "action"},
+                {"role": "tool", "content": tool_result, "node": "action"},
+            ],
+        }
+
+    llm = _get_llm()
     html_rule = ""
     if _request_expects_html(user_request):
         html_rule = """
@@ -325,6 +474,17 @@ EK HTML KURALI (ZORUNLU):
 - *.html dosyasına yazarken content tam HTML dokümanı olmalı.
 - En az <!doctype html>, <html>, <head>, <body> etiketleri bulunmalı.
 - Sadece düz metin (ör. sadece 'Hello World') yazma.
+"""
+
+    simple_edit_rule = ""
+    if simple_edit_mode:
+        simple_edit_rule = """
+SIMPLE EDIT KURALI:
+- Kullanıcı kısa bir metin/dosya değişikliği istiyor.
+- En fazla 1 read_file ve 1 write_file kullan.
+- restart_service kullanma.
+- Gereksiz test/derleme komutu çalıştırma.
+- Dosya değiştiyse işi burada bitir; ekstra doğrulama döngüsüne girme.
 """
 
     # Tool çağrısı için prompt
@@ -338,6 +498,7 @@ Kullanıcı isteği:
 {_format_messages(state.get('messages', []))}
 
 {html_rule}
+{simple_edit_rule}
 
 Şimdi hangi aksiyonu alman gerekiyor? Tek bir tool çağrısı yap.
 Respond with a JSON:
@@ -351,7 +512,8 @@ Respond with a JSON:
     messages = [
         SystemMessage(content=(
             "Sen bir kod yazma agent'sın. Verilen plan doğrultusunda tek bir adım gerçekleştir. "
-            "Tool JSON formatına kesinlikle uy. HTML/sayfa isteklerinde *.html içeriğini tam HTML dokümanı olarak üret."
+            "Tool JSON formatına kesinlikle uy. HTML/sayfa isteklerinde *.html içeriğini tam HTML dokümanı olarak üret. "
+            "Basit metin düzenlemelerinde restart_service çağırma."
         )),
         HumanMessage(content=action_prompt),
     ]

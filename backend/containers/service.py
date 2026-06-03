@@ -1,10 +1,12 @@
-"""
-Containers modülü — Kubernetes işlemleri.
+﻿"""
+Containers modÃ¼lÃ¼ â€” Kubernetes iÅŸlemleri.
 
-Gerçek Kubernetes Python client entegrasyonu.
+GerÃ§ek Kubernetes Python client entegrasyonu.
 """
 
 import asyncio
+import os
+from pathlib import Path
 from typing import Dict, Optional
 
 import structlog
@@ -43,18 +45,46 @@ def _k8s_not_ready_error() -> RuntimeError:
         "Sidecar imaji da build edilmeli: `docker build -t aicodereviewer-sidecar:latest backend/sidecar`."
     )
 
-# Kubeconfig yükleme
-try:
-    config.load_kube_config()
-    logger.info("kubeconfig_loaded", source="local")
-except config.ConfigException:
+def _load_kube_config() -> None:
+    """Load kubeconfig from a reliable local file before falling back."""
+    kubeconfig_candidates = [
+        os.environ.get("KUBECONFIG"),
+        str(Path(__file__).resolve().parents[1] / ".kubeconfig"),
+    ]
+
+    last_error: Exception | None = None
+
+    for candidate in kubeconfig_candidates:
+        if not candidate:
+            continue
+        try:
+            config.load_kube_config(config_file=candidate)
+            logger.info("kubeconfig_loaded", source="file", path=candidate)
+            return
+        except Exception as exc:
+            last_error = exc
+
+    try:
+        config.load_kube_config()
+        logger.info("kubeconfig_loaded", source="local")
+        return
+    except Exception as exc:
+        last_error = exc
+
     try:
         config.load_incluster_config()
         logger.info("kubeconfig_loaded", source="incluster")
+        return
     except config.ConfigException:
-        logger.warning("kubeconfig_not_found")
+        logger.warning(
+            "kubeconfig_not_found",
+            error=str(last_error) if last_error else None,
+        )
 
-# API client tanımları global bırakılıyor, yüklendikten sonra hata vermezse kullanılır.
+
+_load_kube_config()
+
+# API client tanÄ±mlarÄ± global bÄ±rakÄ±lÄ±yor, yÃ¼klendikten sonra hata vermezse kullanÄ±lÄ±r.
 try:
     core_v1 = client.CoreV1Api()
     apps_v1 = client.AppsV1Api()
@@ -81,7 +111,7 @@ async def create_pod(
     namespace: str,
 ) -> dict:
     """
-    Proje için Kubernetes pod ve yardımcı objelerini oluşturur.
+    Proje iÃ§in Kubernetes pod ve yardÄ±mcÄ± objelerini oluÅŸturur.
 
     - Namespace
     - Deployment (Ana uygulama + Sidecar API)
@@ -101,7 +131,7 @@ async def create_pod(
     loop = asyncio.get_running_loop()
 
     def _create_k8s_objects():
-        # 1. Namespace oluştur
+        # 1. Namespace oluÅŸtur
         try:
             ns = client.V1Namespace(metadata=client.V1ObjectMeta(name=namespace))
             core_v1.create_namespace(body=ns)
@@ -109,15 +139,15 @@ async def create_pod(
             if e.status != 409:  # 409 Conflict = already exists
                 raise
 
-        # 2. Deployment oluştur
+        # 2. Deployment oluÅŸtur
         deployment_name = f"project-{project_id}"
         
-        # Ana uygulamanın container'i (Örnek olarak Node/Alpine. Projeye göre değişebilir)
+        # Ana uygulamanÄ±n container'i (Ã–rnek olarak Node/Alpine. Projeye gÃ¶re deÄŸiÅŸebilir)
         container_app = client.V1Container(
             name="app",
             image="node:18-alpine",
             command=["sh", "-c"],
-            args=["while true; do sleep 30; done;"],  # İçeriği sidecar dolduracak/çalıştıracak
+            args=["while true; do sleep 30; done;"],  # Ä°Ã§eriÄŸi sidecar dolduracak/Ã§alÄ±ÅŸtÄ±racak
             volume_mounts=[client.V1VolumeMount(name="workspace", mount_path="/workspace")],
             working_dir="/workspace",
             resources=client.V1ResourceRequirements(
@@ -135,7 +165,7 @@ async def create_pod(
         # Sidecar API
         container_sidecar = client.V1Container(
             name="sidecar",
-            image="aicodereviewer-sidecar:latest",  # Dockerfile build alınmalı
+            image="aicodereviewer-sidecar:latest",  # Dockerfile build alÄ±nmalÄ±
             image_pull_policy="IfNotPresent",
             ports=[client.V1ContainerPort(container_port=8000, name="sidecar-http")],
             volume_mounts=[client.V1VolumeMount(name="workspace", mount_path="/workspace")],
@@ -154,7 +184,7 @@ async def create_pod(
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": deployment_name}),
             spec=client.V1PodSpec(
-                share_process_namespace=True, # Sidecar'ın app'i kill edebilmesi için
+                share_process_namespace=True, # Sidecar'Ä±n app'i kill edebilmesi iÃ§in
                 containers=[container_app, container_sidecar],
                 volumes=[client.V1Volume(name="workspace", empty_dir=client.V1EmptyDirVolumeSource())]
             )
@@ -177,7 +207,7 @@ async def create_pod(
             if e.status != 409:
                 raise
 
-        # 3. Service oluştur
+        # 3. Service oluÅŸtur
         service_name = f"project-{project_id}-svc"
         service = client.V1Service(
             api_version="v1",
@@ -194,14 +224,21 @@ async def create_pod(
             if e.status != 409:
                 raise
 
-        # 4. Ingress oluştur
+        # 4. Ingress oluÅŸtur
         ingress_name = f"project-{project_id}-ingress"
         preview_host = f"project-{project_id}.{settings.BASE_DOMAIN}"
         ingress = client.V1Ingress(
             api_version="networking.k8s.io/v1",
             kind="Ingress",
-            metadata=client.V1ObjectMeta(name=ingress_name),
+            metadata=client.V1ObjectMeta(
+                name=ingress_name,
+                annotations={
+                    # Backward compatibility for controllers that still look at the annotation.
+                    "kubernetes.io/ingress.class": settings.K8S_INGRESS_CLASS,
+                },
+            ),
             spec=client.V1IngressSpec(
+                ingress_class_name=settings.K8S_INGRESS_CLASS,
                 rules=[client.V1IngressRule(
                     host=preview_host,
                     http=client.V1HTTPIngressRuleValue(
@@ -249,7 +286,7 @@ async def delete_pod(
     project_id: str,
     namespace: str,
 ) -> bool:
-    """Namespace'i silerek tüm pod objelerini (deployment, service vb.) k8s cluster'dan uçurur."""
+    """Namespace'i silerek tÃ¼m pod objelerini (deployment, service vb.) k8s cluster'dan uÃ§urur."""
     logger.info("delete_pod_k8s", project_id=project_id, namespace=namespace)
 
     if not core_v1:
@@ -274,7 +311,7 @@ async def get_pod_status(
     namespace: str,
 ) -> str:
     """
-    Pod'un gerçek k8s phase durumunu kontrol eder.
+    Pod'un gerÃ§ek k8s phase durumunu kontrol eder.
     """
     logger.debug("get_pod_status_k8s", project_id=project_id, namespace=namespace)
 
@@ -293,7 +330,7 @@ async def get_pod_status(
             if not pods.items:
                 return "not_found"
             
-            # Replicas=1 olduğundan ilk pod'u al
+            # Replicas=1 olduÄŸundan ilk pod'u al
             pod = pods.items[0]
             return pod.status.phase.lower() # running, pending, failed vb.
         except ApiException:
@@ -303,7 +340,7 @@ async def get_pod_status(
 
 
 async def get_active_pod_count() -> int:
-    """Tüm isim alanlarındaki running project-* pod'larını sayar."""
-    # Şimdilik DB'den okunduğu için 0 dönmeye devam edebilir, 
+    """TÃ¼m isim alanlarÄ±ndaki running project-* pod'larÄ±nÄ± sayar."""
+    # Şimdilik DB'den okunduğu için 0 dönmeye devam edebilir,
     # db'den kopup direkt k8s kullanılması isteniyorsa değiştirilebilir.
     return 0
