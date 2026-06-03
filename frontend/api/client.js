@@ -19,6 +19,33 @@ function clearTokens() {
   localStorage.removeItem('user');
 }
 
+// FastAPI / Pydantic hata yanıtlarını okunabilir tek bir mesaja çevirir.
+// - 422: detail bir array of {loc, msg, type} -> her satırı "alan: mesaj" yapar
+// - 400/401/409 vb: detail düz string
+// - fallback: data.message ya da genel mesaj
+function extractErrorMessage(data, status) {
+  const detail = data?.detail;
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((e) => {
+        const field =
+          Array.isArray(e?.loc) && e.loc.length > 0
+            ? e.loc[e.loc.length - 1] // genelde "body" sonrası gerçek alan adı
+            : null;
+        const message = e?.msg ?? 'Geçersiz değer';
+        return field ? `${field}: ${message}` : message;
+      })
+      .join('\n');
+  }
+
+  if (typeof detail === 'string') return detail;
+  if (typeof data?.message === 'string') return data.message;
+  if (typeof data === 'string' && data.trim()) return data;
+
+  return `Bir hata oluştu (${status}).`;
+}
+
 async function tryRefresh() {
   const { refresh } = getTokens();
   if (!refresh) return false;
@@ -61,10 +88,14 @@ export async function apiRequest(method, path, body, { auth = true, retry = true
   const contentType = res.headers.get('content-type') ?? '';
   const isJson = contentType.includes('application/json');
   const data = isJson ? await res.json() : await res.text();
+
   if (!res.ok) {
-    const msg = data?.detail ?? data?.message ?? 'Bir hata oluştu.';
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    const error = new Error(extractErrorMessage(data, res.status));
+    error.status = res.status;   // çağıran taraf isterse status'a göre dallanabilir
+    error.detail = data?.detail; // ham detail de erişilebilir kalsın
+    throw error;
   }
+
   return data;
 }
 
