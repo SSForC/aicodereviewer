@@ -32,6 +32,7 @@ from agent.nodes import (
     observer_node,
     planner_node,
     summary_updater_node,
+    _is_simple_text_edit_request,
 )
 from core.config import settings
 from core.database import Database
@@ -139,6 +140,17 @@ def _is_stalled_same_tool_loop(state: dict) -> bool:
     return len(set(results)) <= 1
 
 
+def _has_successful_write(state: dict) -> bool:
+    """Son action geçmişinde başarılı bir write_file var mı?"""
+    events = _collect_action_events(state.get("messages", []))
+    for event in reversed(events):
+        if event.get("tool") != "write_file":
+            continue
+        result = (event.get("result") or "").lower()
+        return "dosya yazıldı" in result and "tool hatası" not in result
+    return False
+
+
 # ═══════════════════════════════════════════════════════
 # AGENT STATE
 # ═══════════════════════════════════════════════════════
@@ -203,6 +215,14 @@ def _should_continue(state: AgentState) -> str:
             "agent_max_steps_reached",
             project_id=state.get("project_id"),
             steps=current_step,
+        )
+        return "summary_updater"
+
+    if _is_simple_text_edit_request(state.get("user_request", "")) and _has_successful_write(state):
+        logger.info(
+            "observer_forced_done_simple_edit",
+            project_id=state.get("project_id"),
+            step=current_step,
         )
         return "summary_updater"
 
@@ -396,7 +416,7 @@ async def run_agent(
         "user_request": user_request,
         "session_id": session_id,
         "current_step": 0,
-        "max_steps": 25,
+        "max_steps": 8 if _is_simple_text_edit_request(user_request) else 25,
         "messages": [],
         "errors": [],
         "status": "running",

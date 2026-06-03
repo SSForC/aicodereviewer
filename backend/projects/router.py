@@ -222,6 +222,10 @@ class ExecRequest(BaseModel):
     command: str
     timeout: int = 30
 
+
+class CreateDirectoryRequest(BaseModel):
+    path: str
+
 @router.get("/{project_id}/files")
 async def list_project_files(
     project_id: str,
@@ -266,6 +270,16 @@ async def exec_project_command(
 ):
     client = SandboxClient(project_id)
     return await client.exec_command(data.command, data.timeout)
+
+
+@router.post("/{project_id}/directories/create")
+async def create_project_directory(
+    project_id: str,
+    data: CreateDirectoryRequest,
+    current_user: TokenPayload = Depends(get_current_user),
+):
+    client = SandboxClient(project_id)
+    return await client.create_directory(data.path)
 
 
 # -- DOSYA 0^LEMLER0 (SIDECAR PROXY) --

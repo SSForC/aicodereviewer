@@ -32,7 +32,6 @@ Thumbs.db
 
 # Local Kubernetes config
 .kube/
-.kubeconfig
 
 # Docker
 docker-compose.override.yml
